@@ -1,0 +1,36 @@
+name: Data Pipeline CI
+
+# Pipeline as Code: this file IS the CI/CD configuration, version-controlled
+# alongside the pipeline it tests.
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    name: Unit test transformations & extractor
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run unit tests (transformations + mocked API extractor)
+        run: pytest -v --cov=etl_pipeline --cov=api_extractor --cov-report=term-missing
+
+      - name: Fail build if coverage drops below threshold
+        run: pytest --cov=etl_pipeline --cov=api_extractor --cov-fail-under=30

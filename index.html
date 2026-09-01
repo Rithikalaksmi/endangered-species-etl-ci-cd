@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Endangered Species Analytics | End-to-End Data Engineering Pipeline</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    
+    <!-- Leaflet GIS Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-icon">
+                    <i class="fa-solid fa-leaf"></i>
+                </div>
+                <div class="brand-text">
+                    <h2>EcoData <span>Engine</span></h2>
+                    <p>Endangered Species Analytics</p>
+                </div>
+            </div>
+
+            <nav class="nav-menu">
+                <a href="#overview" class="nav-item active" data-tab="overview">
+                    <i class="fa-solid fa-chart-pie"></i>
+                    <span>Overview & KPIs</span>
+                </a>
+                <a href="#gis-map" class="nav-item" data-tab="gis-map">
+                    <i class="fa-solid fa-map-location-dot"></i>
+                    <span>GIS Spatial Map</span>
+                </a>
+                <a href="#olap-cube" class="nav-item" data-tab="olap-cube">
+                    <i class="fa-solid fa-cubes"></i>
+                    <span>OLAP Data Cube</span>
+                </a>
+                <a href="#cdc-logs" class="nav-item" data-tab="cdc-logs">
+                    <i class="fa-solid fa-stream"></i>
+                    <span>CDC Event Feed</span>
+                </a>
+                <a href="#pipeline-audit" class="nav-item" data-tab="pipeline-audit">
+                    <i class="fa-solid fa-server"></i>
+                    <span>ETL Audit History</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="course-badge">
+                    <i class="fa-solid fa-graduation-cap"></i>
+                    <div>
+                        <strong>22MDCEL10 Lab</strong>
+                        <p>CIT Coimbatore</p>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Top Bar Header -->
+            <header class="topbar">
+                <div class="header-title">
+                    <h1>End-to-End ETL Pipeline for Endangered Species Analytics</h1>
+                    <p>Dynamic Production Data Warehouse, CDC Stream & GIS Visual Engine</p>
+                </div>
+                <div class="header-actions">
+                    <div class="status-indicator live">
+                        <span class="pulse-dot"></span>
+                        <span id="pipeline-status-badge">Pipeline Active</span>
+                    </div>
+                    <button class="btn btn-primary" id="open-insert-modal-btn">
+                        <i class="fa-solid fa-plus"></i> Insert Sighting
+                    </button>
+                </div>
+            </header>
+
+            <!-- Control Panel Bar -->
+            <section class="control-panel glass-card">
+                <div class="panel-header">
+                    <h3><i class="fa-solid fa-terminal"></i> Pipeline Execution & Ingestion Triggers</h3>
+                    <p>Trigger dynamic ETL loads, REST API extractions, or data quality validation tests</p>
+                </div>
+                <div class="panel-buttons">
+                    <button class="btn btn-emerald" id="run-full-etl-btn">
+                        <i class="fa-solid fa-rotate-right"></i> Run Full ETL Load
+                    </button>
+                    <button class="btn btn-cyan" id="run-incremental-btn">
+                        <i class="fa-solid fa-bolt"></i> Run Incremental Load
+                    </button>
+                    <button class="btn btn-purple" id="run-api-ingest-btn">
+                        <i class="fa-solid fa-cloud-arrow-down"></i> Simulate REST API Ingest
+                    </button>
+                    <button class="btn btn-danger" id="test-bad-data-btn">
+                        <i class="fa-solid fa-shield-cat"></i> Test Quarantine Gatekeeper
+                    </button>
+                </div>
+            </section>
+
+            <!-- KPI Row -->
+            <section class="kpi-grid">
+                <div class="kpi-card glass-card">
+                    <div class="kpi-icon icon-emerald">
+                        <i class="fa-solid fa-paw"></i>
+                    </div>
+                    <div class="kpi-data">
+                        <span class="kpi-value" id="kpi-total-obs">--</span>
+                        <span class="kpi-label">Total Observations</span>
+                    </div>
+                </div>
+
+                <div class="kpi-card glass-card">
+                    <div class="kpi-icon icon-amber">
+                        <i class="fa-solid fa-shield-halved"></i>
+                    </div>
+                    <div class="kpi-data">
+                        <span class="kpi-value" id="kpi-total-species">--</span>
+                        <span class="kpi-label">Endangered Species Tracked</span>
+                    </div>
+                </div>
+
+                <div class="kpi-card glass-card">
+                    <div class="kpi-icon icon-cyan">
+                        <i class="fa-solid fa-circle-check"></i>
+                    </div>
+                    <div class="kpi-data">
+                        <span class="kpi-value" id="kpi-clean-rate">--%</span>
+                        <span class="kpi-label">Data Quality Clean Rate</span>
+                    </div>
+                </div>
+
+                <div class="kpi-card glass-card">
+                    <div class="kpi-icon icon-purple">
+                        <i class="fa-solid fa-bolt"></i>
+                    </div>
+                    <div class="kpi-data">
+                        <span class="kpi-value" id="kpi-cdc-events">--</span>
+                        <span class="kpi-label">CDC Change Log Events</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab Content: Overview Analytics -->
+            <div id="tab-overview" class="tab-content active">
+                <div class="charts-grid">
+                    <div class="chart-card glass-card">
+                        <div class="chart-header">
+                            <h3><i class="fa-solid fa-chart-pie"></i> Species Population Distribution</h3>
+                        </div>
+                        <div class="chart-body">
+                            <canvas id="categoryChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-card glass-card">
+                        <div class="chart-header">
+                            <h3><i class="fa-solid fa-cloud-sun"></i> Seasonal Sightings Dynamics</h3>
+                        </div>
+                        <div class="chart-body">
+                            <canvas id="seasonalChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-card glass-card">
+                        <div class="chart-header">
+                            <h3><i class="fa-solid fa-triangle-exclamation"></i> IUCN Red List Vulnerability</h3>
+                        </div>
+                        <div class="chart-body">
+                            <canvas id="iucnChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-card glass-card">
+                        <div class="chart-header">
+                            <h3><i class="fa-solid fa-star"></i> Media Richness vs Quality Grade</h3>
+                        </div>
+                        <div class="chart-body">
+                            <canvas id="qualityChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: GIS Map -->
+            <div id="tab-gis-map" class="tab-content">
+                <div class="glass-card map-container-card">
+                    <div class="chart-header">
+                        <h3><i class="fa-solid fa-map-location-dot"></i> Interactive Geospatial Sightings Map (India Hotspots)</h3>
+                        <span class="badge badge-info">Click markers for details</span>
+                    </div>
+                    <div id="map"></div>
+                </div>
+            </div>
+
+            <!-- Tab Content: OLAP Data Cube Inspector -->
+            <div id="tab-olap-cube" class="tab-content">
+                <div class="glass-card">
+                    <div class="chart-header">
+                        <h3><i class="fa-solid fa-cubes"></i> OLAP Data Cube Aggregations (Slice & Dice Engine)</h3>
+                        <p>Perform multidimensional slicing and dicing across Category, Season, and Quality Grade</p>
+                    </div>
+
+                    <div class="cube-filters">
+                        <div class="filter-group">
+                            <label><i class="fa-solid fa-filter"></i> Category Slice:</label>
+                            <select id="cube-category-filter" class="form-select">
+                                <option value="All">All Categories</option>
+                                <option value="Asian Elephant">Asian Elephant</option>
+                                <option value="Bengal tiger">Bengal Tiger</option>
+                                <option value="One-Horned Rhinoceros">One-Horned Rhinoceros</option>
+                                <option value="White-rumped Vulture">White-rumped Vulture</option>
+                                <option value="Nilgiri Tahr">Nilgiri Tahr</option>
+                                <option value="Gharial">Gharial</option>
+                                <option value="Lion-Tailed Macaque">Lion-Tailed Macaque</option>
+                            </select>
+                        </div>
+
+                        <div class="filter-group">
+                            <label><i class="fa-solid fa-filter"></i> Season Slice:</label>
+                            <select id="cube-season-filter" class="form-select">
+                                <option value="All">All Seasons</option>
+                                <option value="Winter (Dec-Feb)">Winter (Dec-Feb)</option>
+                                <option value="Summer (Mar-May)">Summer (Mar-May)</option>
+                                <option value="Monsoon (Jun-Sep)">Monsoon (Jun-Sep)</option>
+                                <option value="Post-Monsoon (Oct-Nov)">Post-Monsoon (Oct-Nov)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Category</th>
+                                    <th>Season</th>
+                                    <th>State / Province</th>
+                                    <th>Quality Grade</th>
+                                    <th>Total Sightings</th>
+                                    <th>Avg Media Score</th>
+                                    <th>Images Count</th>
+                                    <th>Research Grade Count</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cube-table-body">
+                                <tr><td colspan="8" class="text-center">Loading OLAP Data Cube metrics...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: CDC Event Stream -->
+            <div id="tab-cdc-logs" class="tab-content">
+                <div class="glass-card">
+                    <div class="chart-header">
+                        <h3><i class="fa-solid fa-stream"></i> Real-Time Change Data Capture (CDC Log Engine)</h3>
+                        <span class="badge badge-success"><i class="fa-solid fa-circle"></i> Log-Based CDC Active</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>CDC ID</th>
+                                    <th>Record ID</th>
+                                    <th>Table Name</th>
+                                    <th>Change Type</th>
+                                    <th>Changed Fields</th>
+                                    <th>New Values Payload</th>
+                                    <th>Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cdc-table-body">
+                                <tr><td colspan="7" class="text-center">Loading Change Data Capture log feed...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Pipeline Run History -->
+            <div id="tab-pipeline-audit" class="tab-content">
+                <div class="glass-card">
+                    <div class="chart-header">
+                        <h3><i class="fa-solid fa-server"></i> ETL Pipeline Audit & Performance Log</h3>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Run ID</th>
+                                    <th>Run Type</th>
+                                    <th>Status</th>
+                                    <th>Processed</th>
+                                    <th>Valid</th>
+                                    <th>Quarantined</th>
+                                    <th>Inserted</th>
+                                    <th>Updated</th>
+                                    <th>Duration (s)</th>
+                                    <th>Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody id="audit-table-body">
+                                <tr><td colspan="10" class="text-center">Loading pipeline execution history...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Modal for Dynamic Observation Insertion -->
+    <div class="modal-backdrop" id="insert-modal">
+        <div class="modal-card glass-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-plus-circle"></i> Insert New Endangered Species Observation</h3>
+                <button class="close-btn" id="close-modal-btn">&times;</button>
+            </div>
+            <form id="insert-obs-form">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Species Common Name</label>
+                        <select id="form-common-name" class="form-control" required>
+                            <option value="Mainland Asian Elephant">Mainland Asian Elephant</option>
+                            <option value="Bengal Tiger">Bengal Tiger</option>
+                            <option value="Indian Rhinoceros">Indian Rhinoceros</option>
+                            <option value="White-rumped Vulture">White-rumped Vulture</option>
+                            <option value="Nilgiri Tahr">Nilgiri Tahr</option>
+                            <option value="Gharial">Gharial</option>
+                            <option value="Lion-tailed Macaque">Lion-tailed Macaque</option>
+                            <option value="Snow Leopard">Snow Leopard</option>
+                            <option value="Himalayan Red Panda">Himalayan Red Panda</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Animal Category</label>
+                        <select id="form-category" class="form-control" required>
+                            <option value="Asian Elephant">Asian Elephant</option>
+                            <option value="Bengal tiger">Bengal Tiger</option>
+                            <option value="One-Horned Rhinoceros">One-Horned Rhinoceros</option>
+                            <option value="White-rumped Vulture">White-rumped Vulture</option>
+                            <option value="Nilgiri Tahr">Nilgiri Tahr</option>
+                            <option value="Gharial">Gharial</option>
+                            <option value="Lion-Tailed Macaque">Lion-Tailed Macaque</option>
+                            <option value="leopard">Leopard / Snow Leopard</option>
+                            <option value="red panda">Red Panda</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Observation Date</label>
+                        <input type="date" id="form-date" class="form-control" value="2026-08-12" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Season</label>
+                        <select id="form-season" class="form-control" required>
+                            <option value="Summer (Mar-May)">Summer (Mar-May)</option>
+                            <option value="Monsoon (Jun-Sep)">Monsoon (Jun-Sep)</option>
+                            <option value="Post-Monsoon (Oct-Nov)">Post-Monsoon (Oct-Nov)</option>
+                            <option value="Winter (Dec-Feb)">Winter (Dec-Feb)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Latitude</label>
+                        <input type="number" step="0.000001" id="form-lat" class="form-control" value="26.5775" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Longitude</label>
+                        <input type="number" step="0.000001" id="form-lon" class="form-control" value="93.1711" required>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label>Location Description / Place</label>
+                        <input type="text" id="form-place" class="form-control" value="Kaziranga National Park, Assam, IN" required>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label>Sighting Notes / Description</label>
+                        <textarea id="form-desc" class="form-control" rows="2">Wild sighting recorded during field monitoring tour.</textarea>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="cancel-modal-btn">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-paper-plane"></i> Submit & Run ETL</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container"></div>
+
+    <!-- Custom App JS -->
+    <script src="app.js"></script>
+</body>
+</html>
