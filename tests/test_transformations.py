@@ -125,6 +125,11 @@ class TestValidateRecord:
         is_valid, reason = validate_record(bad)
         assert is_valid is False
         assert "Outlier Detected" in reason
+    def test_negative_media_score_fails(self, valid_record):
+        bad = dict(valid_record, media_score=-1)
+        is_valid, reason = validate_record(bad)
+        assert is_valid is False
+        assert "Outlier Detected" in reason
 
 
 # ---------------------------------------------------------------------------
