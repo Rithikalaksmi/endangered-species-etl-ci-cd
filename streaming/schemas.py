@@ -12,14 +12,14 @@ from pyspark.sql.types import (
 )
 
 OBSERVATION_SCHEMA = StructType([
-    StructField("id", LongType(), nullable=True),
+    StructField("id", StringType(), nullable=True),
     StructField("observed_on", StringType(), nullable=True),
     StructField("season", StringType(), nullable=True),
     StructField("quality_grade", StringType(), nullable=True),
-    StructField("media_score", IntegerType(), nullable=True),
+    StructField("media_score", StringType(), nullable=True),
     StructField("place_guess", StringType(), nullable=True),
-    StructField("latitude", DoubleType(), nullable=True),
-    StructField("longitude", DoubleType(), nullable=True),
+    StructField("latitude", StringType(), nullable=True),
+    StructField("longitude", StringType(), nullable=True),
     StructField("common_name", StringType(), nullable=True),
     StructField("scientific_name", StringType(), nullable=True),
     StructField("animal_category", StringType(), nullable=True),
@@ -27,8 +27,8 @@ OBSERVATION_SCHEMA = StructType([
     StructField("gps_precision", StringType(), nullable=True),
     StructField("image_url", StringType(), nullable=True),
     StructField("sound_url", StringType(), nullable=True),
-    StructField("has_audio", IntegerType(), nullable=True),
-    StructField("has_image", IntegerType(), nullable=True),
+    StructField("has_audio", StringType(), nullable=True),
+    StructField("has_image", StringType(), nullable=True),
     StructField("description", StringType(), nullable=True),
     StructField("country", StringType(), nullable=True),
 ])

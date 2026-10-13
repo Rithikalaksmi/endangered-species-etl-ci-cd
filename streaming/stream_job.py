@@ -41,7 +41,7 @@ JDBC_URL        = os.getenv("ICEBERG_CATALOG_JDBC_URL",
     "jdbc:postgresql://postgres:5432/iceberg_catalog?user=lakehouse&password=lakehouse123")
 WAREHOUSE       = os.getenv("ICEBERG_WAREHOUSE", "s3a://lakehouse/")
 CHECKPOINT_DIR  = os.getenv("SPARK_CHECKPOINT_DIR", "s3a://lakehouse/checkpoints/stream_job")
-TRIGGER_SEC     = int(os.getenv("STREAM_TRIGGER_SECONDS", "15"))
+TRIGGER_SEC     = int(os.getenv("STREAM_TRIGGER_SECONDS", "5"))
 
 def build_spark() -> SparkSession:
     jars_dir = "/opt/spark/work-dir/spark/jars"
@@ -55,18 +55,35 @@ def build_spark() -> SparkSession:
         .config("spark.sql.catalog.lake",
                 "org.apache.iceberg.spark.SparkCatalog")
         .config("spark.sql.catalog.lake.type", "jdbc")
-        .config("spark.sql.catalog.lake.uri", JDBC_URL)
+        .config("spark.sql.catalog.lake.uri", "jdbc:postgresql://postgres:5432/iceberg_catalog")
+        .config("spark.sql.catalog.lake.jdbc.user", "lakehouse")
+        .config("spark.sql.catalog.lake.jdbc.password", "lakehouse123")
         .config("spark.sql.catalog.lake.warehouse", WAREHOUSE)
         .config("spark.sql.catalog.lake.jdbc.schema-version", "V1")
-        .config("spark.hadoop.fs.s3a.endpoint", MINIO_ENDPOINT)
-        .config("spark.hadoop.fs.s3a.access.key", AWS_KEY)
-        .config("spark.hadoop.fs.s3a.secret.key", AWS_SECRET)
-        .config("spark.hadoop.fs.s3a.path.style.access", "true")
+        .config("spark.hadoop.fs.s3.impl",
+                "org.apache.hadoop.fs.s3a.S3AFileSystem")
         .config("spark.hadoop.fs.s3a.impl",
                 "org.apache.hadoop.fs.s3a.S3AFileSystem")
+        .config("spark.hadoop.fs.s3a.endpoint", MINIO_ENDPOINT)
+        .config("spark.hadoop.fs.s3.endpoint", MINIO_ENDPOINT)
+        .config("spark.hadoop.fs.s3a.access.key", AWS_KEY)
+        .config("spark.hadoop.fs.s3.access.key", AWS_KEY)
+        .config("spark.hadoop.fs.s3a.secret.key", AWS_SECRET)
+        .config("spark.hadoop.fs.s3.secret.key", AWS_SECRET)
+        .config("spark.hadoop.fs.s3a.path.style.access", "true")
+        .config("spark.hadoop.fs.s3.path.style.access", "true")
         .config("spark.hadoop.fs.s3a.aws.credentials.provider",
                 "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider")
-        .config("spark.sql.shuffle.partitions", "4")
+        .config("spark.sql.catalog.lake.s3.endpoint", MINIO_ENDPOINT)
+        .config("spark.sql.catalog.lake.s3.path-style-access", "true")
+        .config("spark.sql.catalog.lake.write.spark.fanout.enabled", "false")
+        .config("spark.sql.catalog.lake.write.distribution-mode", "none")
+        .config("spark.sql.catalog.lake.write.parquet.row-group-size-bytes", "8388608")
+        .config("spark.sql.catalog.lake.write.parquet.page-size-bytes", "1048576")
+        .config("spark.sql.catalog.lake.write.parquet.dict-size-bytes", "1048576")
+        .config("spark.sql.iceberg.planning.preserve-data-grouping", "true")
+        .config("spark.sql.parquet.writeLegacyFormat", "false")
+        .config("spark.sql.shuffle.partitions", "2")
         .config("spark.sql.adaptive.enabled", "true")
     )
     if jar_files:
@@ -103,16 +120,21 @@ def transform_batch(spark: SparkSession):
         if input_count == 0:
             return
 
+        lat = F.col("latitude").cast("double")
+        lon = F.col("longitude").cast("double")
+        score = F.col("media_score").cast("int")
+        id_col = F.col("id").cast("long")
+
         valid_mask = (
-            F.col("id").isNotNull() &
+            id_col.isNotNull() &
             F.col("observed_on").isNotNull() &
-            F.col("latitude").isNotNull() &
-            F.col("longitude").isNotNull() &
-            (F.col("latitude") >= LAT_MIN) & (F.col("latitude") <= LAT_MAX) &
-            (F.col("longitude") >= LON_MIN) & (F.col("longitude") <= LON_MAX) &
-            F.col("media_score").isNotNull() &
-            (F.col("media_score") >= MEDIA_SCORE_MIN) &
-            (F.col("media_score") <= MEDIA_SCORE_MAX)
+            lat.isNotNull() &
+            lon.isNotNull() &
+            (lat >= LAT_MIN) & (lat <= LAT_MAX) &
+            (lon >= LON_MIN) & (lon <= LON_MAX) &
+            score.isNotNull() &
+            (score >= MEDIA_SCORE_MIN) &
+            (score <= MEDIA_SCORE_MAX)
         )
 
         valid_df   = df.filter(valid_mask)
@@ -120,11 +142,11 @@ def transform_batch(spark: SparkSession):
 
         dlq_df = invalid_df.withColumn(
             "failure_reason",
-            F.when(F.col("id").isNull(), "Null Check Failed: Missing Observation ID")
+            F.when(id_col.isNull(), "Null Check Failed: Missing Observation ID")
              .when(F.col("observed_on").isNull(), "Null Check Failed: Missing Observation Date 'observed_on'")
              .when(
-                 (F.col("latitude") < LAT_MIN) | (F.col("latitude") > LAT_MAX) |
-                 (F.col("longitude") < LON_MIN) | (F.col("longitude") > LON_MAX),
+                 (lat < LAT_MIN) | (lat > LAT_MAX) |
+                 (lon < LON_MIN) | (lon > LON_MAX),
                  F.concat(
                      F.lit("Outlier Detected: Coordinates Lat ("),
                      F.col("latitude").cast(StringType()),
@@ -133,15 +155,40 @@ def transform_batch(spark: SparkSession):
                      F.lit(") outside geographic bounding box")
                  )
              )
+             .when(
+                 (score < MEDIA_SCORE_MIN) | (score > MEDIA_SCORE_MAX),
+                 F.concat(
+                     F.lit("Outlier Detected: Media score ("),
+                     F.col("media_score").cast(StringType()),
+                     F.lit(") outside expected [0, 10] range")
+                 )
+             )
              .otherwise("Schema Mismatch: malformed JSON")
-        ).withColumn("ingestion_ts", F.current_timestamp()) \
+        ).withColumn("id", id_col) \
+         .withColumn("latitude", lat) \
+         .withColumn("longitude", lon) \
+         .withColumn("media_score", score) \
+         .withColumn("has_audio", F.col("has_audio").cast("int")) \
+         .withColumn("has_image", F.col("has_image").cast("int")) \
+         .withColumn("ingestion_ts", F.current_timestamp()) \
          .withColumn("kafka_topic", F.lit(KAFKA_TOPIC)) \
          .withColumn("batch_id", F.lit(str(epoch_id)))
 
+        dlq_cols = [
+            "id", "observed_on", "season", "quality_grade", "media_score",
+            "place_guess", "latitude", "longitude", "common_name",
+            "scientific_name", "animal_category", "data_quality_flag",
+            "gps_precision", "image_url", "sound_url", "has_audio",
+            "has_image", "description", "country", "failure_reason",
+            "kafka_topic", "batch_id", "ingestion_ts"
+        ]
+        dlq_df = dlq_df.select(*dlq_cols)
+
         dlq_count = dlq_df.count()
         if dlq_count > 0:
-            dlq_df.write.format("iceberg") \
+            dlq_df.coalesce(1).write.format("iceberg") \
                 .mode("append") \
+                .option("check-nullability", "false") \
                 .saveAsTable("lake.lakehouse.dead_letter_queue")
             log.info(f"Dead-letter records written: {dlq_count}")
 
@@ -150,39 +197,46 @@ def transform_batch(spark: SparkSession):
             log.info("No valid records in batch")
             return
 
+        obs_date_col = F.to_date(F.col("observed_on"), "yyyy-MM-dd")
+
         enriched = valid_df \
-            .withColumn("obs_date", F.to_date(F.col("observed_on"), "yyyy-MM-dd")) \
-            .withColumn("obs_year", F.year("obs_date")) \
-            .withColumn("obs_month", F.month("obs_date")) \
-            .withColumn("obs_day", F.dayofmonth("obs_date")) \
-            .withColumn("obs_day_of_week", F.dayofweek("obs_date") - 2) \
+            .withColumn("latitude", lat) \
+            .withColumn("longitude", lon) \
+            .withColumn("media_score", score) \
+            .withColumn("has_audio", F.col("has_audio").cast("int")) \
+            .withColumn("has_image", F.col("has_image").cast("int")) \
+            .withColumn("observed_on", obs_date_col) \
+            .withColumn("obs_year", F.year(obs_date_col)) \
+            .withColumn("obs_month", F.month(obs_date_col)) \
+            .withColumn("obs_day", F.dayofmonth(obs_date_col)) \
+            .withColumn("obs_day_of_week", F.dayofweek(obs_date_col) - 2) \
             .withColumn("time_key",
-                F.col("obs_year") * 10000 +
-                F.col("obs_month") * 100 +
-                F.col("obs_day")
+                F.year(obs_date_col) * 10000 +
+                F.month(obs_date_col) * 100 +
+                F.dayofmonth(obs_date_col)
             ) \
             .withColumn("is_weekend",
-                F.when(F.dayofweek("obs_date").isin(1, 7), 1).otherwise(0)
+                F.when(F.dayofweek(obs_date_col).isin(1, 7), 1).otherwise(0)
             ) \
             .withColumn("state_province", extract_state(F.col("place_guess"))) \
             .withColumn("iucn_status", iucn_udf(F.col("animal_category"))) \
             .withColumn("lat_normalized",
-                F.round((F.col("latitude") - LAT_NORM_MIN) / (LAT_NORM_MAX - LAT_NORM_MIN), 6)
+                F.round((lat - LAT_NORM_MIN) / (LAT_NORM_MAX - LAT_NORM_MIN), 6)
             ) \
             .withColumn("lon_normalized",
-                F.round((F.col("longitude") - LON_NORM_MIN) / (LON_NORM_MAX - LON_NORM_MIN), 6)
+                F.round((lon - LON_NORM_MIN) / (LON_NORM_MAX - LON_NORM_MIN), 6)
             ) \
             .withColumn("record_hash",
                 hash_udf(
                     F.col("id").cast(StringType()),
-                    F.col("observed_on"),
+                    F.col("observed_on").cast(StringType()),
                     F.col("latitude").cast(StringType()),
                     F.col("longitude").cast(StringType()),
                     F.col("common_name")
                 )
             ) \
             .withColumn("ingestion_ts", F.current_timestamp()) \
-            .withColumn("id_original", F.col("id").cast("long")) \
+            .withColumn("id_original", id_col) \
             .withColumn("country", F.coalesce(F.col("country"), F.lit("India")))
 
         output_cols = [
@@ -197,14 +251,33 @@ def transform_batch(spark: SparkSession):
         ]
         final_df = enriched.select(*output_cols)
 
-        final_df.createOrReplaceTempView("batch_data")
-        spark.sql("""
-            MERGE INTO lake.lakehouse.fact_observations t
-            USING batch_data s
-            ON t.record_hash = s.record_hash
-            WHEN NOT MATCHED THEN INSERT *
-        """)
-        log.info(f"Batch written to Iceberg: {valid_count} valid records inserted/merged")
+        # Idempotent deduplication against table
+        unique_batch = final_df.dropDuplicates(["record_hash"])
+        try:
+            existing = spark.table("lake.lakehouse.fact_observations").select("record_hash")
+            new_records = unique_batch.join(existing, on="record_hash", how="left_anti")
+        except Exception:
+            new_records = unique_batch
+
+        write_count = new_records.count()
+        if write_count > 0:
+            sorted_records = (
+                new_records
+                .coalesce(1)
+                .sort(
+                    F.year("observed_on"),
+                    F.month("observed_on"),
+                    F.col("iucn_status")
+                )
+            )
+            sorted_records.write.format("iceberg") \
+                .mode("append") \
+                .option("fanout-enabled", "false") \
+                .option("check-nullability", "false") \
+                .saveAsTable("lake.lakehouse.fact_observations")
+            log.info(f"Batch written to Iceberg: {write_count} records inserted (from {valid_count} valid)")
+        else:
+            log.info(f"All {valid_count} valid records in batch were already ingested (deduplicated)")
 
     return _transform
 
@@ -213,13 +286,25 @@ def main():
     spark = build_spark()
 
     spark.sql("CREATE NAMESPACE IF NOT EXISTS lake.lakehouse")
+    try:
+        spark.sql("""
+            ALTER TABLE lake.lakehouse.fact_observations 
+            SET TBLPROPERTIES (
+                'write.spark.fanout.enabled'='false',
+                'write.distribution-mode'='none',
+                'write.parquet.row-group-size-bytes'='8388608'
+            )
+        """)
+    except Exception as e:
+        log.warning(f"Could not set TBLPROPERTIES on fact_observations: {e}")
 
     raw_stream = (
         spark.readStream
         .format("kafka")
         .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP)
         .option("subscribe", KAFKA_TOPIC)
-        .option("startingOffsets", "latest")
+        .option("startingOffsets", "earliest")
+        .option("maxOffsetsPerTrigger", 1000)
         .option("failOnDataLoss", "false")
         .load()
     )

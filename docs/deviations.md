@@ -9,4 +9,5 @@ This document logs all deviations from initial specifications along with justifi
 | Kafka Mode | KRaft | Apache Kafka 3.7.2 in KRaft Mode (`apache/kafka:3.7.2`) | Zero Zookeeper footprint, fast startup, and reduced memory usage (~256 MB heap). |
 | Kafka Offset Tool | `kafka.tools.GetOffsetShell` | `org.apache.kafka.tools.GetOffsetShell` | In Apache Kafka 3.7+, legacy CLI tools were moved under `org.apache.kafka.tools.*`. Running with the full package name preserves exact functionality. |
 | Trino 470 Memory Setting | `query.max-total-memory-per-node` | Removed | Defunct in Trino 470; Trino now uses `query.max-memory-per-node` directly for total query memory planning. |
+| Spark Iceberg Writer Tuning | Generic Iceberg append with fanout | Coalesce to 1 writer, sort by partition keys `(year, month, iucn_status)`, disable fanout (`fanout-enabled=false`), 8MB row groups | In memory-constrained environments (lite mode 1.2 GB RAM), Iceberg's default fanout writer opens simultaneous Parquet writers for 100+ partition combinations in historical backfills, exhausting JVM heap. Sorting and single-file clustering maintains minimal heap usage without data loss. |
 
