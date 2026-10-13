@@ -1,0 +1,52 @@
+version: '3.8'
+
+# docker-compose.lite.yml: Resource-tuned override for laptops with 8 to 16 GB RAM
+# Usage: docker compose -f docker-compose.yml -f docker-compose.lite.yml up -d
+
+services:
+  postgres:
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  minio:
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  kafka:
+    environment:
+      KAFKA_JVM_PERFORMANCE_OPTS: "-Xmx256M -Xms256M"
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+  trino:
+    deploy:
+      resources:
+        limits:
+          memory: 1800M
+
+  spark:
+    environment:
+      SPARK_MASTER: "local[2]"
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  mailhog:
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  phase1-dashboard:
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+

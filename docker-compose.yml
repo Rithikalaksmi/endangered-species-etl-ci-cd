@@ -1,0 +1,247 @@
+version: '3.8'
+
+networks:
+  lakehouse-net:
+    name: lakehouse-net
+    driver: bridge
+
+volumes:
+  postgres_data:
+  minio_data:
+
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    container_name: lakehouse-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lakehouse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lakehouse123}
+      POSTGRES_DB: ${POSTGRES_DB:-iceberg_catalog}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - lakehouse-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lakehouse -d iceberg_catalog"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: cgr.dev/chainguard/minio:latest
+    container_name: lakehouse-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - lakehouse-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio-init:
+    image: cgr.dev/chainguard/minio-client:latest
+    container_name: lakehouse-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - lakehouse-net
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "
+      mc alias set myminio http://minio:9000 minioadmin minioadmin &&
+      mc mb --ignore-existing myminio/lakehouse &&
+      mc mb --ignore-existing myminio/lakehouse/bronze &&
+      mc mb --ignore-existing myminio/lakehouse/silver &&
+      mc mb --ignore-existing myminio/lakehouse/gold &&
+      mc mb --ignore-existing myminio/lakehouse/checkpoints &&
+      echo 'MinIO Lakehouse buckets initialized successfully'
+      "
+    restart: "no"
+
+  kafka:
+    image: apache/kafka:3.7.2
+    container_name: lakehouse-kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_JVM_PERFORMANCE_OPTS: "-Xmx256M -Xms256M"
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+    ports:
+      - "9092:9092"
+    networks:
+      - lakehouse-net
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  kafka-init:
+    image: apache/kafka:3.7.2
+    container_name: lakehouse-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - lakehouse-net
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic species.observations --partitions 3 --replication-factor 1 --config retention.ms=604800000 &&
+      echo 'Kafka topic species.observations configured successfully'
+      "
+    restart: "no"
+
+  trino:
+    image: trinodb/trino:470
+    container_name: lakehouse-trino
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports:
+      - "${TRINO_PORT:-8080}:8080"
+    volumes:
+      - ./trino/etc:/etc/trino:ro
+    networks:
+      - lakehouse-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/v1/info || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+
+  spark:
+    image: lakehouse-spark:3.5.3
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+    container_name: lakehouse-spark
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "4040:4040"
+    environment:
+      SPARK_MASTER: "local[*]"
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+    volumes:
+      - .:/opt/spark/work-dir
+    networks:
+      - lakehouse-net
+    command: ["tail", "-f", "/dev/null"]
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c 'import pyspark; print(pyspark.__version__)' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: lakehouse-mailhog
+    restart: unless-stopped
+    ports:
+      - "${MAILHOG_UI_PORT:-8025}:8025"
+      - "1025:1025"
+    networks:
+      - lakehouse-net
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 1025 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  phase1-dashboard:
+    image: lakehouse-phase1-dashboard:latest
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    container_name: lakehouse-dashboard
+    restart: unless-stopped
+    depends_on:
+      trino:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${DASHBOARD_PORT:-8050}:8050"
+    environment:
+      TRINO_HOST: trino
+      TRINO_PORT: 8080
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC: species.observations
+      DASHBOARD_PORT: 8050
+    networks:
+      - lakehouse-net
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8050/')\" || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  producer:
+    image: lakehouse-producer:latest
+    build:
+      context: .
+      dockerfile: producer/Dockerfile
+    container_name: lakehouse-producer
+    profiles: ["tools"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - lakehouse-net
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: lakehouse-kafka-ui
+    profiles: ["tools", "full"]
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8085:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: lakehouse-kafka
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    networks:
+      - lakehouse-net
+

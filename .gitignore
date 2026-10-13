@@ -8,3 +8,5 @@ htmlcov/
 *.db-wal
 .venv/
 venv/
+.env
+spark/jars/*.jar
