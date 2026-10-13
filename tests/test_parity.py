@@ -147,3 +147,4 @@ class TestExtractStateParity:
         r1 = p1_extract_state(place)
         r2 = p2_extract_state(place)
         assert r1 == r2 == expected, f"place={place!r}: P1={r1!r}, P2={r2!r}, expected={expected!r}"
+

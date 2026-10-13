@@ -82,3 +82,4 @@ with DAG(
     )
 
     t_compact >> t_expire >> t_analyze
+

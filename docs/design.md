@@ -68,3 +68,4 @@ To allow smooth execution on an 8 GB–16 GB laptop (and Docker engines with ~3.
   - Spark: Local executor with 1 core and 1.5 GB memory.
   - Superset: Disabled in lite mode (or single worker).
   - PostgreSQL & MinIO: Alpine/minimal Chainguard base images.
+

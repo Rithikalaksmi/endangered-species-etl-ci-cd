@@ -32,3 +32,4 @@ The local Docker compose stack maps directly to managed enterprise cloud service
 - **Streaming Spark**: Enable dynamic allocation with min 2, max 10 executors.
 - **Trino Cluster**: Separate coordinator node from worker nodes. Set autoscaling policy based on CPU utilization and query queue depth.
 - **Iceberg Table Maintenance**: Schedule automatic compaction after every 10 streaming commits or once per hour during off-peak windows.
+

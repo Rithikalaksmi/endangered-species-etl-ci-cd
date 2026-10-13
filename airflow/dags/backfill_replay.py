@@ -72,3 +72,4 @@ with DAG(
     )
 
     t_before >> t_produce >> t_wait >> t_after
+

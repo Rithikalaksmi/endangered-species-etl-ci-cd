@@ -47,7 +47,7 @@ services:
     networks:
       - lakehouse-net
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      test: ["CMD-SHELL", "/bin/bash -c '</dev/tcp/localhost/9000' || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -167,7 +167,7 @@ services:
       - lakehouse-net
     command: ["tail", "-f", "/dev/null"]
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c 'import pyspark; print(pyspark.__version__)' || exit 1"]
+      test: ["CMD-SHELL", "/opt/spark/bin/spark-submit --version || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10

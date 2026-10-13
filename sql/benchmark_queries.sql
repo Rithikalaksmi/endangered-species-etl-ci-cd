@@ -49,3 +49,4 @@ SELECT state_province, COUNT(DISTINCT animal_category) AS species_count,
 FROM lake.lakehouse.fact_observations
 GROUP BY state_province
 ORDER BY species_count DESC, total_obs DESC;
+

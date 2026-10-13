@@ -32,3 +32,4 @@ OBSERVATION_SCHEMA = StructType([
     StructField("description", StringType(), nullable=True),
     StructField("country", StringType(), nullable=True),
 ])
+

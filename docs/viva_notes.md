@@ -52,3 +52,4 @@
 - If Spark streaming stops, Airflow's 5-minute `pipeline_health` DAG fails the Spark UI or data freshness checks.
 - Airflow triggers failure notifications via SMTP (MailHog).
 - Spark Structured Streaming resumes from S3 checkpoint offsets (`s3a://lakehouse/checkpoints/`) without data loss upon restart.
+

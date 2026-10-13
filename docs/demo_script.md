@@ -74,3 +74,4 @@ docker exec lakehouse-trino trino --execute "SELECT failure_reason, COUNT(*) FRO
 python benchmarks/run_benchmark.py --host localhost --port 8080 --runs 3
 ```
 Inspect the generated `docs/benchmark_report.md`.
+

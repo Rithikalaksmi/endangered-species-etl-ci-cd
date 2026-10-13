@@ -74,3 +74,4 @@ flowchart TD
 | `media_score` | `media_score` | Integer in range `[0, 10]` | `INTEGER` |
 | *(composite)* | `record_hash` | SHA-256 of `id\|observed_on\|latitude\|longitude\|common_name` | `VARCHAR` |
 | *(system)* | `ingestion_ts` | Spark processing batch ingestion timestamp | `TIMESTAMP` |
+

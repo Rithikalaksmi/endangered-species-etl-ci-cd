@@ -16,3 +16,4 @@ echo "Check MailHog UI at http://localhost:8025 to view sent alert emails."
 echo ""
 echo "To restore the pipeline:"
 echo "  docker start lakehouse-spark"
+
