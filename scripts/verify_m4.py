@@ -52,3 +52,4 @@ print(f"Average Endpoint Latency: {sum(latencies)/len(latencies):.1f} ms")
 print(f"Max Endpoint Latency:     {max(latencies):.1f} ms")
 print(f"Min Endpoint Latency:     {min(latencies):.1f} ms")
 print("=" * 70)
+
