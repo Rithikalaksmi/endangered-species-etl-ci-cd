@@ -8,6 +8,7 @@ networks:
 volumes:
   postgres_data:
   minio_data:
+  kafka_data:
 
 services:
   postgres:
@@ -94,6 +95,8 @@ services:
       CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
     ports:
       - "9092:9092"
+    volumes:
+      - kafka_data:/tmp/kraft-broker-logs
     networks:
       - lakehouse-net
     healthcheck:

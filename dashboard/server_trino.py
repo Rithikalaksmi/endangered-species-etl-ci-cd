@@ -8,8 +8,15 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 import urllib.parse
 import os
+import sys
 import time
+from pathlib import Path
 import requests
+
+# Ensure /app and root directory are on sys.path
+sys.path.insert(0, "/app")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from kafka import KafkaProducer
 from common.rules import setup_logger, generate_record_hash
 from dashboard import data_access

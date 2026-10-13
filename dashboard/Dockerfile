@@ -2,6 +2,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+ENV PYTHONPATH=/app
+
 RUN pip install --no-cache-dir trino==0.328.0 kafka-python-ng==2.2.2 requests==2.32.3 pandas==2.2.2
 
 COPY phase1/ /app/phase1/

@@ -36,3 +36,4 @@ cur.execute("""
 """)
 for row in cur.fetchall():
     print(f"Species: {row[0]:<25} | IUCN: {row[1]:<18} | Count: {row[2]}")
+
