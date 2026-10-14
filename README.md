@@ -51,13 +51,13 @@ make demo
 | Service | Port | Description |
 |---|---|---|
 | **Phase I Dashboard** | `http://localhost:8050` | Trino-backed real-time interactive map and analytics |
-| **Trino Query Engine** | `http://localhost:8080` | Distributed ANSI-SQL engine |
+| **Trino Query Engine** | `http://localhost:8082` | Distributed ANSI-SQL Web UI & Coordinator |
 | **MinIO Console** | `http://localhost:9001` | S3 Object storage UI (`minioadmin` / `minioadmin`) |
 | **MinIO S3 API** | `http://localhost:9000` | S3 API endpoint |
 | **Kafka Broker** | `localhost:9092` | Apache Kafka event streaming broker |
-| **Kafka UI** *(optional)* | `http://localhost:8085` | Kafka topic and consumer monitoring |
-| **Apache Airflow** | `http://localhost:8088` | Pipeline orchestration and health checks |
-| **MailHog UI** | `http://localhost:8025` | Local SMTP capture UI for alert emails |
+| **Spark Driver UI** | `http://localhost:4042` | PySpark Structured Streaming micro-batch progress |
+| **MailHog UI** | `http://localhost:8026` | Local SMTP capture UI for Airflow alert emails |
+
 
 ---
 

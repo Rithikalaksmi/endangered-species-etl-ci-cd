@@ -147,7 +147,7 @@ def build_comparison_report(
 def main():
     parser = argparse.ArgumentParser(description="Trino Iceberg Benchmark Runner")
     parser.add_argument("--host", default=os.getenv("TRINO_HOST", "localhost"))
-    parser.add_argument("--port", type=int, default=int(os.getenv("TRINO_PORT", "8080")))
+    parser.add_argument("--port", type=int, default=int(os.getenv("TRINO_PORT", "8082")))
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--out", default="docs/benchmark_report.md")
     args = parser.parse_args()

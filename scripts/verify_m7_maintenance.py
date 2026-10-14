@@ -12,7 +12,8 @@ import time
 import trino
 
 TRINO_HOST = os.getenv("TRINO_HOST", "localhost")
-TRINO_PORT = int(os.getenv("TRINO_PORT", "8080"))
+TRINO_PORT = int(os.getenv("TRINO_PORT", "8082"))
+
 
 def run_task(name: str, sql: str, cur):
     print(f"\n[TASK] {name}")

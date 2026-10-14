@@ -13,11 +13,13 @@ from email.mime.text import MIMEText
 import trino
 
 TRINO_HOST = os.getenv("TRINO_HOST", "localhost")
-TRINO_PORT = int(os.getenv("TRINO_PORT", "8080"))
+TRINO_PORT = int(os.getenv("TRINO_PORT", "8082"))
 
 MAILHOG_HOST = os.getenv("MAILHOG_HOST", "localhost")
 MAILHOG_SMTP_PORT = int(os.getenv("MAILHOG_SMTP_PORT", 1025))
-MAILHOG_API_URL = f"http://{MAILHOG_HOST}:8025/api/v2/messages"
+MAILHOG_UI_PORT = int(os.getenv("MAILHOG_UI_PORT", 8026))
+MAILHOG_API_URL = f"http://{MAILHOG_HOST}:{MAILHOG_UI_PORT}/api/v2/messages"
+
 
 ALERT_EMAIL = "admin@lakehouse.local"
 

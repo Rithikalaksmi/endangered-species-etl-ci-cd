@@ -191,8 +191,9 @@ def main():
     parser.add_argument("--sqlite", default="phase1/endangered_species_dw.db")
     parser.add_argument("--csv", default="phase1/master_endangered_species.csv")
     parser.add_argument("--trino-host", default=os.getenv("TRINO_HOST", "localhost"))
-    parser.add_argument("--trino-port", type=int, default=int(os.getenv("TRINO_PORT", 8080)))
+    parser.add_argument("--trino-port", type=int, default=int(os.getenv("TRINO_PORT", 8082)))
     parser.add_argument("--out", default="docs/reconciliation.md")
+
     args = parser.parse_args()
 
     log.info("Starting reconciliation")

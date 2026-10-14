@@ -43,6 +43,25 @@ def execute_query(sql, params=None):
         return [], []
 
 
+def execute_statement(sql, params=None):
+    """Executes a DML statement (INSERT, UPDATE) against Trino."""
+    try:
+        conn = get_trino_connection()
+        cur = conn.cursor()
+        cur.execute(sql, params or ())
+        try:
+            cur.fetchall()
+        except Exception:
+            pass
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        logger.error(f"Error executing Trino statement: {sql} | Error: {e}")
+        return False
+
+
+
 def get_kpis():
     """
     KPI tile metrics from Trino fact_observations and dead_letter_queue.
