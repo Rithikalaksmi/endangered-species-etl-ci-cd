@@ -25,7 +25,7 @@ def run_trino_query(query: str, **context):
         host=os.getenv("TRINO_HOST", "trino"),
         port=int(os.getenv("TRINO_PORT", 8080)),
         user="airflow",
-        catalog="lake",
+        catalog=os.getenv("TRINO_CATALOG", "iceberg"),
         schema="lakehouse",
     )
     cur = conn.cursor()
@@ -38,28 +38,35 @@ def run_trino_query(query: str, **context):
 def compact_iceberg(**context):
     """Run Iceberg OPTIMIZE (rewrite_data_files) on fact_observations."""
     run_trino_query(
-        "ALTER TABLE lake.lakehouse.fact_observations EXECUTE optimize(file_size_threshold => '128MB')",
+        "ALTER TABLE iceberg.lakehouse.fact_observations EXECUTE optimize(file_size_threshold => '128MB')",
         **context
     )
 
 def expire_snapshots(**context):
     """Expire Iceberg snapshots older than 3 days."""
     run_trino_query(
-        "ALTER TABLE lake.lakehouse.fact_observations EXECUTE expire_snapshots(retention_threshold => '3d')",
+        "ALTER TABLE iceberg.lakehouse.fact_observations EXECUTE expire_snapshots(retention_threshold => '3d')",
+        **context
+    )
+
+def remove_orphan_files(**context):
+    """Remove orphan files no longer referenced by active snapshots (Iceberg vacuuming)."""
+    run_trino_query(
+        "ALTER TABLE iceberg.lakehouse.fact_observations EXECUTE remove_orphan_files(retention_threshold => '1d')",
         **context
     )
 
 def analyze_table(**context):
     """Collect Trino statistics on fact_observations."""
     run_trino_query(
-        "ANALYZE lake.lakehouse.fact_observations",
+        "ANALYZE iceberg.lakehouse.fact_observations",
         **context
     )
 
 with DAG(
     dag_id="table_maintenance",
     default_args=DEFAULT_ARGS,
-    description="Hourly Iceberg compaction, snapshot expiry, and stats collection",
+    description="Hourly Iceberg compaction, snapshot expiry, vacuuming, and stats collection",
     schedule_interval="0 * * * *",
     start_date=datetime(2024, 1, 1),
     catchup=False,
@@ -76,10 +83,15 @@ with DAG(
         python_callable=expire_snapshots,
     )
 
+    t_orphan = PythonOperator(
+        task_id="remove_orphan_files",
+        python_callable=remove_orphan_files,
+    )
+
     t_analyze = PythonOperator(
         task_id="analyze_table_statistics",
         python_callable=analyze_table,
     )
 
-    t_compact >> t_expire >> t_analyze
+    t_compact >> t_expire >> t_orphan >> t_analyze
 

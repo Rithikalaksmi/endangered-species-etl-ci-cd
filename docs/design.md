@@ -53,9 +53,15 @@ flowchart LR
 - **Views**: Exposes star schema compatibility views (`v_dim_species`, `v_dim_location`, `v_dim_time`, `v_cube`, `v_kpis`) so existing Phase I downstream consumers require zero schema alterations.
 
 ### 2.4 Orchestration & Reliability: Apache Airflow & MailHog
-- **Maintenance**: Hourly `table_maintenance` DAG runs Iceberg `optimize` (small file rewrite), `expire_snapshots`, and `ANALYZE` for Trino cost-based optimizer statistics.
+- **Maintenance**: Hourly `table_maintenance` DAG runs Iceberg `optimize` (small file rewrite), `expire_snapshots`, `remove_orphan_files`, and `ANALYZE` for Trino cost-based optimizer statistics.
 - **Health Checks**: 5-minute `pipeline_health` DAG verifies Trino availability, Spark streaming UI, and data freshness.
 - **Alerting**: Dispatches failure alerts to local MailHog SMTP server.
+
+### 2.5 Table Maintenance Terminology: Iceberg vs Delta Lake "Vacuuming"
+In Delta Lake architectures, purging obsolete data files is commonly called **"vacuuming"** (`VACUUM`). In Apache Iceberg, the identical operational requirement is handled by two complementary procedures:
+1. **`expire_snapshots(retention_threshold => ...)`**: Drops metadata snapshots older than a specified threshold from the table history.
+2. **`remove_orphan_files(retention_threshold => ...)`**: Permanently deletes physical Parquet data files from MinIO object storage that are no longer referenced by any active snapshot.
+Together with **`optimize(file_size_threshold => ...)`** (which compacts fragmented micro-batch Parquet files) and **`ANALYZE`** (which refreshes Cost-Based Optimizer statistics), these operations prevent storage bloat and ensure fast query execution.
 
 ---
 
