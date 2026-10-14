@@ -77,8 +77,11 @@ All 48 tests will execute:
 
 - [Architecture Design & Decisions](docs/design.md)
 - [Data Lineage & Column Mappings](docs/lineage.md)
+- [Phase I vs Phase II Reconciliation Report](docs/reconciliation.md)
+- [Trino Serving Benchmark Report](docs/benchmark_report.md)
 - [Viva Voce Defense Notes & Cheat Sheet](docs/viva_notes.md)
 - [Live Demonstration Walkthrough](docs/demo_script.md)
 - [Cloud Deployment Strategy](docs/cloud_deployment.md)
 - [Architectural Deviations](docs/deviations.md)
+
 
