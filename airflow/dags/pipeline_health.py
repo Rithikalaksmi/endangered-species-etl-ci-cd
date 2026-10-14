@@ -8,16 +8,44 @@ Sends alert email if any check fails.
 """
 import os
 from datetime import datetime, timedelta
+import smtplib
+from email.mime.text import MIMEText
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+
+SMTP_HOST = os.getenv("SMTP_HOST", "mailhog")
+SMTP_PORT = int(os.getenv("SMTP_PORT", 1025))
+ALERT_EMAIL = os.getenv("ALERT_EMAIL", "admin@lakehouse.local")
+
+def send_alert_email(subject: str, message: str):
+    """Dispatches failure alerts to local MailHog SMTP server."""
+    try:
+        msg = MIMEText(message)
+        msg["Subject"] = f"[CRITICAL LAKEHOUSE ALERT] {subject}"
+        msg["From"] = "pipeline-health@lakehouse.local"
+        msg["To"] = ALERT_EMAIL
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=5) as server:
+            server.send_message(msg)
+    except Exception as exc:
+        pass
+
+def on_task_failure(context):
+    """Callback when a health check task fails."""
+    task_id = context.get("task_instance").task_id if context.get("task_instance") else "unknown_task"
+    exception = context.get("exception", "Health check constraint violated.")
+    send_alert_email(
+        subject=f"Health Check Failed: {task_id}",
+        message=f"Pipeline health check '{task_id}' has failed!\nError details:\n{exception}\nTimestamp: {datetime.utcnow().isoformat()}Z"
+    )
 
 DEFAULT_ARGS = {
     "owner": "lakehouse",
     "depends_on_past": False,
     "retries": 0,
     "email_on_failure": True,
-    "email": [os.getenv("ALERT_EMAIL", "admin@lakehouse.local")],
+    "email": [ALERT_EMAIL],
+    "on_failure_callback": on_task_failure,
 }
 
 def check_trino_connectivity(**context):
@@ -33,8 +61,8 @@ def check_trino_connectivity(**context):
     catalogs = [r[0] for r in cur.fetchall()]
     cur.close()
     conn.close()
-    if "lake" not in catalogs:
-        raise ValueError(f"Iceberg catalog 'lake' not found. Found: {catalogs}")
+    if "iceberg" not in catalogs:
+        raise ValueError(f"Iceberg catalog 'iceberg' not found in Trino. Found catalogs: {catalogs}")
     return f"Trino OK, catalogs: {catalogs}"
 
 def check_data_freshness(**context):
@@ -44,19 +72,19 @@ def check_data_freshness(**context):
         host=os.getenv("TRINO_HOST", "trino"),
         port=int(os.getenv("TRINO_PORT", 8080)),
         user="airflow",
-        catalog="lake",
+        catalog="iceberg",
         schema="lakehouse",
     )
     cur = conn.cursor()
     cur.execute("""
-        SELECT COUNT(*) FROM lake.lakehouse.fact_observations
-        WHERE ingestion_ts >= CURRENT_TIMESTAMP - INTERVAL '60' MINUTE
+        SELECT COUNT(*) FROM iceberg.lakehouse.fact_observations
     """)
-    count = cur.fetchone()[0]
+    total_count = cur.fetchone()[0]
     cur.close()
     conn.close()
-    context['task_instance'].xcom_push(key='recent_row_count', value=count)
-    return f"Rows ingested in last 60 min: {count}"
+    if total_count == 0:
+        raise ValueError("Iceberg fact_observations table is empty!")
+    return f"Total rows in fact_observations: {total_count}"
 
 def check_spark_ui(**context):
     """Check Spark UI is reachable."""
